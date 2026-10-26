@@ -3,6 +3,7 @@ using BlitzRelay.Protocol;
 using Mirror;
 using System;
 using System.Buffers;
+using UnityEngine;
 
 namespace BlitzRelay.Mirror
 {
@@ -128,20 +129,27 @@ namespace BlitzRelay.Mirror
 		{
 			if (!ReferenceEquals(peer, RelayPeer)) return;
 
-			if (MessageCodec.TryReadError(disconnectInfo.AdditionalData.GetRemainingBytesSpan(), out ErrorCode errorCode))
+			try
 			{
-				Transport.ClearPendingHostPromotion();
+				if (MessageCodec.TryReadError(disconnectInfo.AdditionalData.GetRemainingBytesSpan(), out ErrorCode errorCode))
+				{
+					Transport.ClearPendingHostPromotion();
 
-				Transport.OnClientError?.Invoke(GetTransportError(errorCode), $"Relay returned error code {errorCode}.");
+					Transport.OnClientError?.Invoke(GetTransportError(errorCode), $"Relay returned error code {errorCode}.");
+				}
+				else if (!_pendingPromotionDisconnect && disconnectInfo.Reason != DisconnectReason.RemoteConnectionClose)
+				{
+					Transport.OnClientError?.Invoke(GetTransportError(disconnectInfo.Reason), $"Relay client connection closed. Reason: {disconnectInfo.Reason}.");
+				}
+
+				if (!ReferenceEquals(peer, RelayPeer)) return;
+
+				StopConnection(true);
 			}
-			else if (!_pendingPromotionDisconnect && disconnectInfo.Reason != DisconnectReason.RemoteConnectionClose)
+			catch (Exception exception)
 			{
-				Transport.OnClientError?.Invoke(GetTransportError(disconnectInfo.Reason), $"Relay client connection closed. Reason: {disconnectInfo.Reason}.");
+				Debug.LogException(exception);
 			}
-
-			if (!ReferenceEquals(peer, RelayPeer)) return;
-
-			StopConnection(true);
 		}
 
 		private void NetworkReceiveEventHandler(NetPeer fromPeer, NetPacketReader reader, byte channel, DeliveryMethod deliveryMethod)
@@ -237,6 +245,10 @@ namespace BlitzRelay.Mirror
 						break;
 					}
 				}
+			}
+			catch (Exception exception)
+			{
+				Debug.LogException(exception);
 			}
 			finally
 			{

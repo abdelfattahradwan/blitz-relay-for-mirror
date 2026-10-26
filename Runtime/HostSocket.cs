@@ -139,24 +139,31 @@ namespace BlitzRelay.Mirror
 		{
 			if (!ReferenceEquals(peer, RelayPeer)) return;
 
-			string reason;
-
-			if (MessageCodec.TryReadError(disconnectInfo.AdditionalData.GetRemainingBytesSpan(), out ErrorCode errorCode))
+			try
 			{
-				reason = $"Relay returned error code {errorCode}.";
+				string reason;
 
-				Debug.LogWarning(reason);
+				if (MessageCodec.TryReadError(disconnectInfo.AdditionalData.GetRemainingBytesSpan(), out ErrorCode errorCode))
+				{
+					reason = $"Relay returned error code {errorCode}.";
+
+					Debug.LogWarning(reason);
+				}
+				else
+				{
+					reason = $"Relay host connection lost. Reason: {disconnectInfo.Reason}.";
+
+					Debug.Log(reason);
+				}
+
+				Transport.EnqueueTransportFailure(reason);
+
+				StopConnection(true);
 			}
-			else
+			catch (Exception exception)
 			{
-				reason = $"Relay host connection lost. Reason: {disconnectInfo.Reason}.";
-
-				Debug.Log(reason);
+				Debug.LogException(exception);
 			}
-
-			Transport.EnqueueTransportFailure(reason);
-
-			StopConnection(true);
 		}
 
 		private void NetworkReceiveEventHandler(NetPeer fromPeer, NetPacketReader reader, byte channel, DeliveryMethod deliveryMethod)
@@ -243,6 +250,10 @@ namespace BlitzRelay.Mirror
 						break;
 					}
 				}
+			}
+			catch (Exception exception)
+			{
+				Debug.LogException(exception);
 			}
 			finally
 			{
